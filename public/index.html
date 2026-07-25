@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>ToonKits</title>
+<link rel="icon" href="/logo.png" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root{
+    --red:#e63946; --yellow:#ffd166; --blue:#3a86ff; --green:#2a9d8f;
+    --orange:#f4a261; --purple:#9b5de5; --ink:#14213d; --paper:#fffaf0;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:'Baloo 2',sans-serif;background:#7ec8f0;}
+  canvas{display:block;}
+
+  .screen{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(160deg,#7ec8f0 0%,#ffd166 100%);
+    z-index:50;
+  }
+  .card{
+    background:var(--paper);border:6px solid var(--ink);border-radius:24px;
+    padding:36px 40px;width:340px;max-width:90vw;
+    box-shadow:10px 10px 0 rgba(20,33,61,0.25);
+  }
+  .card h1{
+    margin:0 0 4px;font-size:2.2rem;font-weight:800;color:var(--ink);
+    letter-spacing:-1px;
+  }
+  .card h1 span{color:var(--red);}
+  .card p.tag{margin:0 0 20px;color:#666;font-weight:500;font-size:0.9rem;}
+  .logo-img{display:block;max-width:100%;height:auto;margin:0 auto 6px;}
+  input[type=text],input[type=password]{
+    width:100%;padding:12px 14px;margin-bottom:12px;border-radius:12px;
+    border:3px solid var(--ink);font-family:inherit;font-size:1rem;font-weight:600;
+    background:#fff;
+  }
+  input:focus{outline:none;border-color:var(--blue);}
+  .btn{
+    display:inline-block;width:100%;padding:12px;border-radius:14px;border:3px solid var(--ink);
+    font-family:inherit;font-weight:800;font-size:1.05rem;cursor:pointer;
+    background:var(--green);color:#fff;box-shadow:4px 4px 0 rgba(20,33,61,0.4);
+    transition:transform 0.06s ease;
+  }
+  .btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 rgba(20,33,61,0.4);}
+  .btn.alt{background:var(--blue);}
+  .switch{text-align:center;margin-top:14px;font-size:0.85rem;color:#555;}
+  .switch a{color:var(--red);font-weight:700;cursor:pointer;text-decoration:underline;}
+  .err{color:var(--red);font-weight:700;font-size:0.85rem;min-height:18px;margin:-4px 0 10px;}
+
+  .swatchLabel{font-weight:800;color:var(--ink);font-size:0.85rem;margin:10px 0 6px;letter-spacing:0.5px;}
+  .swatches{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start;margin:0 0 6px;}
+  .swatch{
+    width:36px;height:36px;border-radius:9px;border:3px solid var(--ink);cursor:pointer;
+    box-shadow:3px 3px 0 rgba(20,33,61,0.3);
+  }
+  .swatch.selected{outline:4px solid var(--ink);outline-offset:3px;}
+
+  .gameGrid{display:flex;gap:14px;margin:16px 0 6px;}
+  .gameCard{
+    flex:1;border:4px solid var(--ink);border-radius:16px;padding:18px 12px;text-align:center;
+    cursor:pointer;background:#fff;box-shadow:5px 5px 0 rgba(20,33,61,0.3);
+    transition:transform 0.08s ease;
+  }
+  .gameCard:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 rgba(20,33,61,0.35);}
+  .gameCard.soon{cursor:default;opacity:0.55;}
+  .gameCard.soon:hover{transform:none;box-shadow:5px 5px 0 rgba(20,33,61,0.3);}
+  .gameCardIcon{font-size:2.2rem;margin-bottom:6px;}
+  .gameCardTitle{font-weight:800;color:var(--ink);font-size:1rem;}
+  .gameCardDesc{font-size:0.75rem;color:#666;margin-top:4px;font-weight:600;}
+
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:20;font-family:'Baloo 2',sans-serif;}
+  #crosshair{
+    position:absolute;top:50%;left:50%;width:16px;height:16px;margin:-8px;
+    border:3px solid rgba(255,255,255,0.9);border-radius:50%;
+    box-shadow:0 0 4px rgba(0,0,0,0.5);
+  }
+  #playerList{
+    position:absolute;top:16px;left:16px;background:rgba(20,33,61,0.75);color:#fff;
+    padding:10px 14px;border-radius:14px;font-weight:700;font-size:0.85rem;max-width:220px;
+    border:3px solid rgba(255,255,255,0.15);
+  }
+  #playerList .title{color:var(--yellow);margin-bottom:4px;font-size:0.75rem;letter-spacing:1px;}
+  #instructions{
+    position:absolute;top:16px;right:16px;background:rgba(20,33,61,0.75);color:#fff;
+    padding:10px 14px;border-radius:14px;font-size:0.78rem;line-height:1.5;font-weight:600;
+    max-width:230px;border:3px solid rgba(255,255,255,0.15);
+  }
+  #hotbar{
+    position:absolute;bottom:96px;left:50%;transform:translateX(-50%);
+    display:flex;gap:8px;background:rgba(20,33,61,0.75);padding:8px;border-radius:14px;
+    border:3px solid rgba(255,255,255,0.15);pointer-events:auto;
+  }
+  .hbslot{
+    width:38px;height:38px;border-radius:8px;border:3px solid rgba(255,255,255,0.4);cursor:pointer;
+    position:relative;
+  }
+  .hbslot.active{border-color:#fff;box-shadow:0 0 0 3px var(--yellow);}
+  .hbslot span{position:absolute;bottom:-2px;right:2px;font-size:0.6rem;color:#fff;font-weight:800;text-shadow:0 0 3px #000;}
+
+  #chatBox{
+    position:absolute;bottom:16px;left:16px;width:320px;pointer-events:auto;
+  }
+  #chatLog{
+    max-height:160px;overflow-y:auto;background:rgba(20,33,61,0.55);border-radius:12px 12px 0 0;
+    padding:8px 10px;font-size:0.8rem;color:#fff;font-weight:600;
+  }
+  #chatLog div{margin-bottom:3px;word-wrap:break-word;}
+  #chatInput{
+    width:100%;padding:8px 12px;border:none;border-radius:0 0 12px 12px;font-family:inherit;
+    font-weight:600;font-size:0.85rem;background:rgba(255,255,255,0.9);
+  }
+  #chatInput:focus{outline:2px solid var(--blue);}
+  #joinToast{
+    position:absolute;top:70px;left:50%;transform:translateX(-50%);
+    background:rgba(20,33,61,0.85);color:#fff;padding:6px 16px;border-radius:20px;
+    font-weight:700;font-size:0.8rem;opacity:0;transition:opacity 0.4s;
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div class="screen" id="authScreen">
+  <div class="card">
+    <img class="logo-img" src="/logo.png" alt="ToonKits" width="260" />
+    <p class="tag">build stuff. hang out. real multiplayer.</p>
+    <div class="err" id="authErr"></div>
+    <input type="text" id="authUser" placeholder="Username" maxlength="16" />
+    <input type="password" id="authPass" placeholder="Password" maxlength="64" />
+    <button class="btn" id="authBtn">Log In</button>
+    <div class="switch" id="authSwitch">New here? <a id="authToggle">Create an account</a></div>
+  </div>
+</div>
+
+<!-- COLOR / AVATAR SCREEN -->
+<div class="screen" id="colorScreen" style="display:none;">
+  <div class="card" style="width:380px;">
+    <h1>Pick Your <span>Look</span></h1>
+    <p class="tag">customize your avatar</p>
+    <div class="swatchLabel">Skin</div>
+    <div class="swatches" id="skinSwatches"></div>
+    <div class="swatchLabel">Shirt</div>
+    <div class="swatches" id="shirtSwatches"></div>
+    <div class="swatchLabel">Pants</div>
+    <div class="swatches" id="pantsSwatches"></div>
+    <button class="btn alt" id="enterBtn">Continue</button>
+  </div>
+</div>
+
+<!-- HUB SCREEN: choose a game -->
+<div class="screen" id="hubScreen" style="display:none;">
+  <div class="card" style="width:460px;">
+    <h1>Choose a <span>Game</span></h1>
+    <p class="tag">pick where you want to play</p>
+    <div class="gameGrid">
+      <div class="gameCard" id="playBuildWorld">
+        <div class="gameCardIcon">🧱</div>
+        <div class="gameCardTitle">Build World</div>
+        <div class="gameCardDesc">Build, hang out, and chat with everyone online</div>
+      </div>
+      <div class="gameCard soon">
+        <div class="gameCardIcon">🔒</div>
+        <div class="gameCardTitle">Coming Soon</div>
+        <div class="gameCardDesc">Tell me what game to build here next</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GAME HUD -->
+<div id="hud" style="display:none;">
+  <div id="crosshair"></div>
+  <div id="playerList"><div class="title">ONLINE</div><div id="playerListItems"></div></div>
+  <div id="instructions">
+    <b>WASD</b> move · <b>drag mouse</b> look<br/>
+    <b>E</b> place block · <b>Q</b> remove block<br/>
+    <b>1-6</b> pick color · <b>Enter</b> chat
+  </div>
+  <div id="hotbar"></div>
+  <div id="chatBox">
+    <div id="chatLog"></div>
+    <input id="chatInput" placeholder="Press Enter to chat..." />
+  </div>
+  <div id="joinToast"></div>
+</div>
+
+<script>
+const PALETTE = ["#e63946","#ffd166","#1f6fbf","#7cb342","#f4a261","#9b5de5"];
+const SKIN_TONES = ["#f5c518","#ffe0bd","#f1c27d","#c68642","#8d5524","#e8beac"];
+
+// ---------------- AUTH FLOW ----------------
+let mode = "login"; // or "signup"
+let myUsername = "";
+let myColors = { skin: SKIN_TONES[0], shirt: PALETTE[2], pants: PALETTE[3] };
+const authBtn = document.getElementById("authBtn");
+const authToggle = document.getElementById("authToggle");
+const authSwitch = document.getElementById("authSwitch");
+const authErr = document.getElementById("authErr");
+
+const socket = io();
+
+authToggle.addEventListener("click", () => {
+  mode = mode === "login" ? "signup" : "login";
+  authBtn.textContent = mode === "login" ? "Log In" : "Sign Up";
+  authSwitch.innerHTML = mode === "login"
+    ? 'New here? <a id="authToggle2">Create an account</a>'
+    : 'Already have one? <a id="authToggle2">Log in</a>';
+  document.getElementById("authToggle2").addEventListener("click", () => authToggle.click());
+  authErr.textContent = "";
+});
+
+authBtn.addEventListener("click", () => {
+  const username = document.getElementById("authUser").value.trim();
+  const password = document.getElementById("authPass").value;
+  authErr.textContent = "";
+  if (!username || !password) { authErr.textContent = "Fill in both fields."; return; }
+
+  socket.emit(mode, { username, password }, (res) => {
+    if (!res.ok) { authErr.textContent = res.error; return; }
+    myUsername = username;
+    if (res.color && res.color.skin) myColors = res.color;
+    document.getElementById("authScreen").style.display = "none";
+    showColorScreen();
+  });
+});
+
+function buildSwatchGroup(containerId, colors, selectedValue, onPick){
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = "";
+  colors.forEach(c => {
+    const el = document.createElement("div");
+    el.className = "swatch" + (c === selectedValue ? " selected" : "");
+    el.style.background = c;
+    el.addEventListener("click", () => {
+      onPick(c);
+      [...wrap.children].forEach(s => s.classList.remove("selected"));
+      el.classList.add("selected");
+    });
+    wrap.appendChild(el);
+  });
+}
+
+function showColorScreen(){
+  buildSwatchGroup("skinSwatches", SKIN_TONES, myColors.skin, c => myColors.skin = c);
+  buildSwatchGroup("shirtSwatches", PALETTE, myColors.shirt, c => myColors.shirt = c);
+  buildSwatchGroup("pantsSwatches", [...PALETTE, "#2b2d42", "#ffffff"], myColors.pants, c => myColors.pants = c);
+  document.getElementById("colorScreen").style.display = "flex";
+}
+
+document.getElementById("enterBtn").addEventListener("click", () => {
+  document.getElementById("colorScreen").style.display = "none";
+  document.getElementById("hubScreen").style.display = "flex";
+});
+
+document.getElementById("playBuildWorld").addEventListener("click", () => {
+  document.getElementById("hubScreen").style.display = "none";
+  document.getElementById("hud").style.display = "block";
+  socket.emit("join", { username: myUsername, color: myColors });
+  initGame();
+});
+
+// ---------------- GAME STATE ----------------
+let scene, camera, renderer, clock;
+let selfId = null;
+let selfPos = { x: 0, y: 0.5, z: 0 };
+let yaw = 0, pitch = -0.25; // camera orbit angles
+const keys = {};
+let selectedColor = PALETTE[0];
+const blockMeshes = {};   // "x,y,z" -> mesh
+const worldBlocks = {};   // "x,y,z" -> color (logical)
+const otherAvatars = {};  // socketId -> {group, target:{x,y,z,ry}}
+let gameStarted = false;
+
+function initGame(){
+  if (gameStarted) return;
+  gameStarted = true;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x7ec8f0);
+  scene.fog = new THREE.Fog(0x7ec8f0, 30, 90);
+
+  camera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 500);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+  scene.add(ambient);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(30, 50, 20);
+  sun.castShadow = true;
+  scene.add(sun);
+
+  // Ground
+  const groundGeo = new THREE.PlaneGeometry(200, 200);
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0x6fbf73 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const grid = new THREE.GridHelper(200, 100, 0x3f8f4a, 0x3f8f4a);
+  grid.position.y = 0.01;
+  scene.add(grid);
+
+  clock = new THREE.Clock();
+  window.addEventListener("resize", onResize);
+  setupControls();
+  buildHotbar();
+  animate();
+}
+
+function onResize(){
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// -------- Avatar creation --------
+// Classic-Roblox stud proportions, scaled to fit our world's block size:
+// Head 2x1x1 studs, Torso 2x2x1 studs, each limb 1x2x1 studs.
+const STUD = 0.4;
+const HEAD_W = 2*STUD, HEAD_H = 1*STUD, HEAD_D = 1*STUD;
+const TORSO_W = 2*STUD, TORSO_H = 2*STUD, TORSO_D = 1*STUD;
+const LIMB_W = 1*STUD, LIMB_H = 2*STUD, LIMB_D = 1*STUD;
+const LEG_X = STUD/2;        // hip x-offset from center
+const ARM_X = STUD*1.5;      // shoulder x-offset from center
+const WALK_AMP = 0.9;        // radians, pendulum swing amount
+const WALK_FREQ = 8;         // swing speed while walking
+
+// Shared logo texture for the chest decal (loaded once, reused on every avatar)
+let LOGO_ASPECT = 3.6; // fallback guess until the real image dimensions are known
+const LOGO_TEXTURE = new THREE.TextureLoader().load('/logo.png', tex => {
+  LOGO_ASPECT = tex.image.width / tex.image.height;
+});
+
+// colors = { skin, shirt, pants }
+function makeAvatar(colors){
+  const group = new THREE.Group();
+  const skinMat = new THREE.MeshStandardMaterial({ color: colors.skin });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: colors.shirt });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: colors.pants });
+  const faceMat = new THREE.MeshStandardMaterial({ color: 0x2b2d42 });
+
+  const legTopY = LIMB_H;                    // hip joint height (top of leg)
+  const torsoY = LIMB_H + TORSO_H/2;
+  const shoulderY = LIMB_H + TORSO_H;         // shoulder joint height (top of torso)
+  const headY = shoulderY + HEAD_H/2;
+
+  // Torso (static — attached directly, no joint needed)
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(TORSO_W, TORSO_H, TORSO_D), shirtMat);
+  torso.position.y = torsoY;
+  torso.castShadow = true;
+  group.add(torso);
+
+  // ToonKits chest decal, scaled to the logo's real aspect ratio (not stretched to a square)
+  const decalW = TORSO_W * 0.82;
+  const decalH = decalW / LOGO_ASPECT;
+  const decalMat = new THREE.MeshBasicMaterial({ map: LOGO_TEXTURE, transparent: true, depthWrite: false });
+  const decal = new THREE.Mesh(new THREE.PlaneGeometry(decalW, decalH), decalMat);
+  decal.position.set(0, torsoY, TORSO_D/2 + 0.006);
+  decal.renderOrder = 1;
+  group.add(decal);
+
+  // Head (fixed to torso via a static "Neck" — no idle bob, matches classic behavior)
+  const head = new THREE.Mesh(new THREE.BoxGeometry(HEAD_W, HEAD_H, HEAD_D), skinMat);
+  head.position.y = headY;
+  head.castShadow = true;
+  group.add(head);
+
+  const eyeGeo = new THREE.BoxGeometry(0.06,0.06,0.02);
+  const eyeL = new THREE.Mesh(eyeGeo, faceMat); eyeL.position.set(-HEAD_W*0.22, headY+0.02, HEAD_D/2+0.01);
+  const eyeR = new THREE.Mesh(eyeGeo, faceMat); eyeR.position.set(HEAD_W*0.22, headY+0.02, HEAD_D/2+0.01);
+  const smile = new THREE.Mesh(new THREE.BoxGeometry(HEAD_W*0.4,0.04,0.02), faceMat);
+  smile.position.set(0, headY-0.08, HEAD_D/2+0.01);
+  group.add(eyeL, eyeR, smile);
+
+  // Hip joints (LeftHip / RightHip) — pivots at the hip, leg mesh hangs below
+  const limbGeo = new THREE.BoxGeometry(LIMB_W, LIMB_H, LIMB_D);
+  function makeLimb(mat, pivotX, pivotY){
+    const pivot = new THREE.Group();
+    pivot.position.set(pivotX, pivotY, 0);
+    const mesh = new THREE.Mesh(limbGeo, mat);
+    mesh.position.set(0, -LIMB_H/2, 0); // hangs straight down from the joint
+    mesh.castShadow = true;
+    pivot.add(mesh);
+    group.add(pivot);
+    return pivot;
+  }
+  const hipL = makeLimb(pantsMat, -LEG_X, legTopY);
+  const hipR = makeLimb(pantsMat, LEG_X, legTopY);
+  // Shoulder joints (LeftShoulder / RightShoulder)
+  const shoulderL = makeLimb(skinMat, -ARM_X, shoulderY);
+  const shoulderR = makeLimb(skinMat, ARM_X, shoulderY);
+
+  return { group, joints: { hipL, hipR, shoulderL, shoulderR }, moving:false, walkTime:0, stopTimer:null };
+}
+
+// Applies the classic sine-wave walk cycle (or resets to the frozen idle pose)
+function animateAvatarRig(avatar, dt){
+  const j = avatar.joints;
+  if (avatar.moving){
+    avatar.walkTime += dt * WALK_FREQ;
+    const swing = Math.sin(avatar.walkTime) * WALK_AMP;
+    // Right arm swings in sync with left leg, left arm in sync with right leg
+    j.hipL.rotation.x = swing;
+    j.hipR.rotation.x = -swing;
+    j.shoulderR.rotation.x = swing;
+    j.shoulderL.rotation.x = -swing;
+  } else {
+    // Idle: frozen, arms and legs straight down — no breathing/sway
+    j.hipL.rotation.x = 0;
+    j.hipR.rotation.x = 0;
+    j.shoulderL.rotation.x = 0;
+    j.shoulderR.rotation.x = 0;
+  }
+}
+
+let selfAvatar = null;
+
+// -------- Building --------
+function blockKey(x,y,z){ return `${x},${y},${z}`; }
+
+function addBlock(x,y,z,color, broadcastAlready){
+  const key = blockKey(x,y,z);
+  if (blockMeshes[key]) return;
+  const geo = new THREE.BoxGeometry(1,1,1);
+  const mat = new THREE.MeshStandardMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x+0.5, y+0.5, z+0.5);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+  blockMeshes[key] = mesh;
+  worldBlocks[key] = color;
+}
+
+function removeBlockLocal(x,y,z){
+  const key = blockKey(x,y,z);
+  if (blockMeshes[key]) {
+    scene.remove(blockMeshes[key]);
+    delete blockMeshes[key];
+    delete worldBlocks[key];
+  }
+}
+
+function groundHeightAt(x,z){
+  const rx = Math.round(x), rz = Math.round(z);
+  let top = 0;
+  for (const key in worldBlocks){
+    const [bx,by,bz] = key.split(",").map(Number);
+    if (bx===rx && bz===rz && by+1>top) top = by+1;
+  }
+  return top;
+}
+
+// -------- Controls --------
+let dragging = false, lastMouse = {x:0,y:0};
+
+function setupControls(){
+  window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === "Enter"){
+      const input = document.getElementById("chatInput");
+      if (document.activeElement === input){
+        sendChat();
+      } else {
+        input.focus();
+      }
+    }
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 6){
+      selectedColor = PALETTE[num-1];
+      highlightHotbar();
+    }
+    if (e.key.toLowerCase() === "e") tryBuild(true);
+    if (e.key.toLowerCase() === "q") tryBuild(false);
+  });
+  window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+  renderer.domElement.addEventListener("mousedown", e => {
+    dragging = true; lastMouse = { x:e.clientX, y:e.clientY };
+  });
+  window.addEventListener("mouseup", () => dragging = false);
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastMouse.x, dy = e.clientY - lastMouse.y;
+    lastMouse = { x:e.clientX, y:e.clientY };
+    yaw += dx * 0.005;
+    pitch -= dy * 0.005;
+    pitch = Math.max(-1.2, Math.min(0.6, pitch));
+  });
+}
+
+function tryBuild(place){
+  // raycast from screen center
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera({x:0,y:0}, camera);
+  const targets = Object.values(blockMeshes);
+  targets.push(scene.children.find(c => c.geometry instanceof THREE.PlaneGeometry));
+  const hits = raycaster.intersectObjects(targets.filter(Boolean));
+  if (!hits.length) return;
+  const hit = hits[0];
+  const point = hit.point.clone();
+  const normal = hit.face.normal.clone();
+  normal.transformDirection(hit.object.matrixWorld);
+
+  if (place){
+    const px = Math.floor(point.x + normal.x*0.5);
+    const py = Math.floor(point.y + normal.y*0.5);
+    const pz = Math.floor(point.z + normal.z*0.5);
+    addBlock(px, Math.max(py,0), pz, selectedColor);
+    socket.emit("placeBlock", { x:px, y:Math.max(py,0), z:pz, color:selectedColor });
+  } else {
+    if (hit.object.geometry.type !== "BoxGeometry") return; // don't remove ground
+    const px = Math.floor(point.x - normal.x*0.5);
+    const py = Math.floor(point.y - normal.y*0.5);
+    const pz = Math.floor(point.z - normal.z*0.5);
+    removeBlockLocal(px,py,pz);
+    socket.emit("removeBlock", { x:px, y:py, z:pz });
+  }
+}
+
+// -------- Hotbar UI --------
+function buildHotbar(){
+  const bar = document.getElementById("hotbar");
+  bar.innerHTML = "";
+  PALETTE.forEach((c,i) => {
+    const slot = document.createElement("div");
+    slot.className = "hbslot" + (c===selectedColor ? " active" : "");
+    slot.style.background = c;
+    slot.innerHTML = `<span>${i+1}</span>`;
+    slot.addEventListener("click", () => { selectedColor = c; highlightHotbar(); });
+    bar.appendChild(slot);
+  });
+}
+function highlightHotbar(){
+  [...document.getElementById("hotbar").children].forEach((el,i) => {
+    el.classList.toggle("active", PALETTE[i] === selectedColor);
+  });
+}
+
+// -------- Chat --------
+function sendChat(){
+  const input = document.getElementById("chatInput");
+  const text = input.value.trim();
+  if (text) socket.emit("chat", text);
+  input.value = "";
+  input.blur();
+}
+function appendChat(msg){
+  const log = document.getElementById("chatLog");
+  const div = document.createElement("div");
+  div.innerHTML = `<span style="color:${msg.color}">${escapeHtml(msg.username)}</span>: ${escapeHtml(msg.text)}`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function toast(text){
+  const t = document.getElementById("joinToast");
+  t.textContent = text;
+  t.style.opacity = 1;
+  setTimeout(() => t.style.opacity = 0, 2500);
+}
+
+// -------- Player list UI --------
+let playerNames = {}; // id -> username
+function refreshPlayerList(){
+  const el = document.getElementById("playerListItems");
+  el.innerHTML = Object.values(playerNames).map(n => `<div>${escapeHtml(n)}</div>`).join("");
+}
+
+// ---------------- SOCKET EVENTS ----------------
+socket.on("init", (data) => {
+  selfId = data.you;
+  selfAvatar = makeAvatar(myColors);
+  scene.add(selfAvatar.group);
+
+  for (const key in data.world){
+    const [x,y,z] = key.split(",").map(Number);
+    addBlock(x,y,z,data.world[key]);
+  }
+  for (const id in data.players){
+    if (id === selfId) continue;
+    const p = data.players[id];
+    spawnOther(id, p);
+  }
+  playerNames[selfId] = myUsername;
+  refreshPlayerList();
+  data.chatLog.forEach(appendChat);
+});
+
+function spawnOther(id, p){
+  const avatar = makeAvatar(p.color);
+  avatar.group.position.set(p.x, p.y, p.z);
+  scene.add(avatar.group);
+  avatar.target = { x:p.x, y:p.y, z:p.z, ry:p.ry };
+  otherAvatars[id] = avatar;
+  playerNames[id] = p.username;
+  refreshPlayerList();
+}
+
+socket.on("playerJoined", ({ id, player }) => {
+  spawnOther(id, player);
+  toast(`${player.username} joined`);
+});
+
+socket.on("playerLeft", ({ id }) => {
+  if (otherAvatars[id]){
+    scene.remove(otherAvatars[id].group);
+    clearTimeout(otherAvatars[id].stopTimer);
+    delete otherAvatars[id];
+  }
+  delete playerNames[id];
+  refreshPlayerList();
+});
+
+socket.on("playerMoved", ({ id, x, y, z, ry }) => {
+  const o = otherAvatars[id];
+  if (!o) return;
+  o.target = { x, y, z, ry };
+  o.moving = true;
+  clearTimeout(o.stopTimer);
+  o.stopTimer = setTimeout(() => { o.moving = false; }, 250);
+});
+
+socket.on("blockPlaced", ({ x,y,z,color }) => addBlock(x,y,z,color));
+socket.on("blockRemoved", ({ x,y,z }) => removeBlockLocal(x,y,z));
+socket.on("chatMessage", appendChat);
+
+// ---------------- MAIN LOOP ----------------
+let lastSent = 0;
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  if (selfAvatar){
+    const speed = 4.5;
+    let mx = 0, mz = 0;
+    if (keys["w"]) mz -= 1;
+    if (keys["s"]) mz += 1;
+    if (keys["a"]) mx -= 1;
+    if (keys["d"]) mx += 1;
+    selfAvatar.moving = !!(mx || mz);
+    if (mx || mz){
+      const len = Math.hypot(mx,mz); mx/=len; mz/=len;
+      const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
+      const right = { x: Math.sin(yaw+Math.PI/2), z: Math.cos(yaw+Math.PI/2) };
+      const dx = (forward.x*-mz + right.x*mx) * speed * dt;
+      const dz = (forward.z*-mz + right.z*mx) * speed * dt;
+      selfPos.x += dx; selfPos.z += dz;
+      selfAvatar.group.rotation.y = Math.atan2(dx, dz) || selfAvatar.group.rotation.y;
+    }
+    selfPos.y = groundHeightAt(selfPos.x, selfPos.z);
+    selfAvatar.group.position.set(selfPos.x, selfPos.y, selfPos.z);
+    animateAvatarRig(selfAvatar, dt);
+
+    // camera orbit behind avatar
+    const dist = 6.5;
+    const camX = selfPos.x - Math.sin(yaw)*Math.cos(pitch)*dist;
+    const camY = selfPos.y + 2 + Math.sin(-pitch)*dist;
+    const camZ = selfPos.z - Math.cos(yaw)*Math.cos(pitch)*dist;
+    camera.position.set(camX, camY, camZ);
+    camera.lookAt(selfPos.x, selfPos.y+1.4, selfPos.z);
+
+    const now = performance.now();
+    if (now - lastSent > 80){
+      lastSent = now;
+      socket.emit("move", { x:selfPos.x, y:selfPos.y, z:selfPos.z, ry:selfAvatar.group.rotation.y });
+    }
+  }
+
+  // interpolate other players + animate their rigs
+  for (const id in otherAvatars){
+    const o = otherAvatars[id];
+    o.group.position.lerp(new THREE.Vector3(o.target.x, o.target.y, o.target.z), 0.25);
+    o.group.rotation.y += (o.target.ry - o.group.rotation.y) * 0.25;
+    animateAvatarRig(o, dt);
+  }
+
+  renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>
